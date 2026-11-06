@@ -405,22 +405,19 @@ def draw_reaction_marks(painter, cx, cy, scale=1.0, phase=0.0, kind='carinho', s
             star.closeSubpath()
             painter.drawPath(star)
     elif kind in ('perseguindo', 'comemorando'):
+        if kind=='perseguindo':
+            painter.rotate(_clamp(effect_angle,-360.,360.))
         painter.setPen(Qt.NoPen)
         for index in range(3):
             phase_i = phase * (8 if kind == 'perseguindo' else 2.5) + index * math.tau / 3
             if kind == 'perseguindo':
-                # Riscos atrás do movimento e pequenos brilhos laterais.
-                x = -39 + (index % 2) * 5
-                y = 8 + (index - 1) * 12 + math.sin(phase_i) * 2
+                # Os rastros ficam sempre atrás da direção real da corrida.
+                x = -48 - 2.*math.sin(phase_i)
+                y = (index-1)*11.
                 painter.setPen(_pen(color='#a8efff', width=1.7 + index * .35,
                                     alpha=strength * (.45 + .18 * index)))
-                painter.drawLine(QPointF(x - 5, y), QPointF(x + 1, y - 2))
+                painter.drawLine(QPointF(x-5.,y),QPointF(x+2.,y))
                 painter.setPen(Qt.NoPen)
-                x = 35 * math.cos(phase_i)
-                y = -30 + 8 * math.sin(phase_i)
-                size = 1.7 + .8 * (1 + math.sin(phase_i * 1.7))
-                painter.setBrush(_color('#fff0a6', strength * .8))
-                painter.drawEllipse(QPointF(x, y), size, size)
             else:
                 x = 34 * math.cos(phase_i)
                 y = -30 + 10 * math.sin(phase_i)

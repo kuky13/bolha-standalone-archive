@@ -62,6 +62,12 @@ def animation_pose(mode, seconds, strength=1.):
         pose.update(emotion='assustado', blink=max(0., 1 - t / .11),
                     ear_raise=-2. * rebound, squash=.23 * rebound * strength,
                     angle_offset=5. * math.exp(-t * 6) * math.sin(t * 16) * strength)
+    elif mode == 'bravo':
+        rage=(.55+.45*strength)*(.92+.08*math.sin(t*11.))
+        pose.update(eye_open=.48-.10*rage,ear_raise=-3.5*rage,
+                    ear_tilt=11.*rage,squash=.025*math.sin(t*17.)*rage,
+                    angle_offset=2.2*math.sin(t*19.)*rage,
+                    anger=rage,effect='bravo',effect_strength=.75*rage)
     elif mode == 'tonto':
         pose.update(emotion='tonto', ear_raise=-1.5, ear_tilt=9 * math.sin(t * 7),
                     squash=.07 * math.sin(t * 9), angle_offset=7 * math.sin(t * 5),
@@ -96,15 +102,16 @@ def animation_pose(mode, seconds, strength=1.):
                     angle_offset=6.5 * math.sin(t * 20) * rage,
                     effect='bravo', effect_strength=_unit(rage * strength),
                     anger=_unit(rage * pulse))
-    elif mode == 'brinquedo_perseguindo':
-        dash = .5 + .5 * math.sin(t * 15)
+    elif mode in ('correndo','brinquedo_perseguindo'):
+        stride = t*math.tau*2.
+        push = math.sin(stride)
         pose.update(emotion='atento', eye_open=1.16,
-                    ear_raise=1.4 - 2.5 * strength,
-                    ear_tilt=-8. - 5. * dash * strength,
-                    squash=.10 * dash * strength - .045,
-                    angle_offset=5. * math.sin(t * 10) * strength,
-                    effect='perseguindo', effect_strength=.45 + .55 * strength)
-    elif mode == 'pingpong_rebatida':
+                    ear_raise=-1.4*strength+1.1*push,
+                    ear_tilt=-9.-6.*strength-3.*math.cos(stride-.6),
+                    squash=(.045*push-.035)*strength,
+                    angle_offset=(9.+2.7*math.sin(stride-.3))*strength,
+                    effect='perseguindo',effect_strength=.28+.4*strength)
+    elif mode in ('pingpong_rebatida','brinquedo_rebatida'):
         impact = 1. - _ease(t/.09)
         stretch = _ease((t-.035)/.085)*(1.-_ease((t-.13)/.22))
         pose.update(emotion='atento', eye_open=1.-.56*impact+.24*stretch,
@@ -242,10 +249,15 @@ class ExpressionMotion:
         self.last_landing = 0.;self.impact_since = -1e9;self.dizzy_until = 0.
         self.quirk = None;self.quirk_since = now;self.last_quirk = None
         self.blink_until = 0.
+        self.run_phase = 0.
+        self.run_tick = now
         self.pose = animation_pose(self.mode, 0)
 
     def update(self, game, now, press_since=None):
         body, state = game.body, game.state
+        run_dt = max(0.,min(.05,now-self.run_tick))
+        self.run_tick = now
+        self.run_phase += abs(body.vx)*run_dt/max(24.,body.half_w)/3.4
         tones = state.tone.r
         held = press_since is not None or body.held
         if held and self.held_since is None:self.held_since = press_since if press_since is not None else now
@@ -291,6 +303,16 @@ class ExpressionMotion:
         elif (body.grounded and 55.<=abs((body.angle+180.)%360.-180.)<=125.
               and mode in ('observando','contente','curioso','feliz','entediado','atento','neutro')):
             mode = 'deitada'
+        elif (game.pingpong is None and body.grounded and body.upright() and abs(body.vx)>35.
+              and mode in ('observando','contente','curioso','feliz','entediado','atento','neutro')):
+            mode='correndo'
+        running = mode in ('correndo','brinquedo_perseguindo') and body.grounded and abs(body.vx)>35.
+        if running:
+            strength=_unit(abs(body.vx)/360.)
+            elapsed=self.run_phase
+        elif mode=='brinquedo_perseguindo':
+            # A perseguição pode continuar enquanto ela espera o brinquedo chegar.
+            mode='atento'
         eligible = (game.visible() and body.grounded and not held and not game.hover and not game.panel
                     and mode in ('observando', 'contente', 'curioso', 'feliz', 'entediado'))
         if self.quirk is not None and (not eligible or now - self.quirk_since >= QUIRK_SECONDS[self.quirk]):
@@ -310,6 +332,13 @@ class ExpressionMotion:
             self.pose['angle_offset'] *= -1.
         if mode == 'deitada':
             self.pose['gaze'] = tuple(.65*component for component in state.gaze)
+        if running:
+            direction=math.copysign(1.,body.vx)
+            heading=0. if direction>0 else 180.
+            self.pose['angle_offset']*=direction
+            local_angle=math.radians(heading-body.angle-self.pose['angle_offset'])
+            self.pose['gaze']=(math.cos(local_angle)*.86,math.sin(local_angle)*.86)
+            self.pose['effect_angle']=heading-body.angle-self.pose['angle_offset']
         if mode == 'pop_return':
             inward = reaction['inward']
             glance = .47+.22*math.sin(elapsed*5.)*math.exp(-elapsed)
@@ -322,7 +351,7 @@ class ExpressionMotion:
                 depth = -1.21+.99*peek-(.12+.12*strength)*retreat
                 self.pose['corner_peek'] = (inward,depth,emerge)
                 self.pose['angle_offset'] = inward*10.*peek*(1.-emerge)
-        if mode == 'pingpong_rebatida':
+        if mode in ('pingpong_rebatida','brinquedo_rebatida'):
             heading = play_reaction.get('heading',0.)
             follow = math.sin(math.pi*_unit(elapsed/.42))
             self.pose['angle_offset'] += 10.*math.sin(math.radians(heading))*follow

@@ -5,14 +5,16 @@
 A Bolha passeia, pula e quica pela sua tela, brinca com um amendoim, senta no
 próprio notebook e aprende com suas interações.
 
-**Bolha 0.4.2 · Windows x64.** [Baixar no GitHub](https://github.com/kuky13/bolha/releases/tag/v0.4.2).
+**Bolha 0.4.3 · Windows x64.** [Baixar no GitHub](https://github.com/kuky13/bolha/releases/tag/v0.4.3).
 
 [Como interagir](#como-interagir) · [Dados e contexto](#dados-e-contexto) ·
 [Créditos](NOTICE.md)
 
-A 0.4.2 acrescenta pingue-pongue no desktop, quedas animadas e o retorno
-tímido pela borda da tela. O instalador passou pelos testes automatizados
-no Windows. [Validação da 0.4.2](docs/VALIDATION-0.4.2.md).
+A 0.4.3 reúne as configurações na
+**Central da Bolha**, com ajustes detalhados recolhidos e uma aba **Testar**
+para expressões e uma rede neural temporária. Também inclui raquete visível
+no pingue-pongue, corrida que acompanha a direção, contato físico do brinquedo
+e intervalos maiores entre fogos espontâneos.
 
 *Imagem da versão 0.3.0: execução Qt capturada em Linux offscreen, com fundo
 composto para apresentar janelas transparentes. A validação em Windows é separada. A personagem Bolha
@@ -69,14 +71,16 @@ não é necessário instalar Python separadamente.
 | Arrastar | Leva a Bolha ou o brinquedo junto |
 | Soltar | Parado, cai; em movimento, arremessa na direção do mouse e quica |
 | Rodinha | Gira |
-| Menu → Dormir um pouco | Fecha os olhos aos poucos, respira e solta “zzz” |
-| Menu → Brinquedo | Mostra ou guarda o amendoim ou a bolinha escolhida |
-| Menu → Jogar pingue-pongue | Abre uma partida com o brinquedo escolhido |
-| Configurações → Comportamento → Brinquedo | Escolhe amendoim ou bolinha original |
-| Configurações → Aparência | Ajusta o tamanho de cada tipo de objeto |
+| Menu → Interagir → Dormir um pouco | Fecha os olhos aos poucos, respira e solta “zzz” |
+| Menu → Brincar → Mostrar / guardar brinquedo | Mostra ou guarda o amendoim ou a bolinha escolhida |
+| Menu → Brincar → Jogar pingue-pongue | Abre uma partida com o brinquedo escolhido |
+| Central da Bolha → Bolha → Brinquedo | Escolhe amendoim ou bolinha original |
+| Central da Bolha → Bolha → Tamanhos e aparência | Ajusta o tamanho de cada tipo de objeto |
 | Botão direito no GIF | Mostra informações, origem e opções do objeto |
-| Botão direito | Abre configurações e atividades |
-| Menu → Cérebro e emoções | Abre o painel do cérebro |
+| Botão direito | Abre a central e os menus de atividades |
+| Central da Bolha → Testar | Prévia das expressões e simulação temporária de sinais e emoções |
+| Central da Bolha → Testar → Ver o cérebro da minha Bolha | Abre o painel do cérebro da personagem |
+| Central da Bolha → App → Verificar atualizações | Consulta a versão estável no GitHub |
 | Ícone perto do relógio | Mostrar, esconder, pausar e sair |
 | Ctrl + Alt + Shift + B | Pausa ou retoma tudo |
 
@@ -99,7 +103,7 @@ A Bolha tem pousos animados em pé, de lado e de ponta-cabeça.
 Após 12 arremessos fortes em um minuto, a Bolha estoura. Trinta segundos depois,
 ela espia com um olho pela borda da tela, recua e sai devagar. Carinho ajuda
 a recuperar a confiança mais rápido. O limite e a opção de desligar o estouro
-ficam em **Comportamento**.
+ficam em **Central da Bolha → Bolha → Comportamento e aprendizado**.
 
 Ela evita monitores em tela cheia e continua nos demais; se todos estiverem
 ocupados, fica escondida. Iniciar com o Windows é opcional e vem desligado.

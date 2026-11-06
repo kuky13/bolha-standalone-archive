@@ -211,13 +211,54 @@ def test_reacoes_a_perseguir_e_keep_away_sao_visuais_sem_alterar_a_fisica(tmp_pa
     assert cooling['anger'] < .15 and cooling['effect_strength'] < .15
     game.play_reaction = dict(kind='brinquedo_perseguindo', started=101, until=103,
                               intensity=.8)
+    waiting = motion.update(game,101.3)
+    assert waiting['emotion']=='atento' and waiting['effect'] is None
+    game.body.vx=300.
     chase = motion.update(game, 101.4)
     assert chase['emotion'] == 'atento' and chase['effect'] == 'perseguindo'
-    assert chase['effect_strength'] > .8
+    assert chase['gaze'][0]>.7 and chase['effect_strength']>.5
+    game.body.vx=0.
     game.play_reaction = dict(kind='comemorando', started=102, until=104, intensity=.9)
     cheer = motion.update(game, 102.3)
     assert cheer['emotion'] == 'comemorando' and cheer['effect'] == 'comemorando'
     assert vars(game.body) == body_before
+
+
+def test_corrida_espelha_olhar_inclinacao_e_rastros_sem_mover_o_corpo(tmp_path):
+    game=game_at_rest(tmp_path)
+    game.state.emotion='observando'
+    poses=[]
+    for velocity in (-280.,280.):
+        game.body.vx=velocity
+        before=vars(game.body).copy()
+        pose=ExpressionMotion(100.).update(game,100.04)
+        assert pose['gaze'][0]*velocity>0.
+        assert pose['angle_offset']*velocity>0.
+        assert pose['effect']=='perseguindo'
+        assert vars(game.body)==before
+        poses.append(pose)
+    assert poses[0]['angle_offset']==pytest.approx(-poses[1]['angle_offset'])
+    assert poses[0]['squash']==poses[1]['squash']
+    game.body.vx=0.
+    assert ExpressionMotion(100.).update(game,100.04)['effect'] is None
+
+
+def test_rebatida_do_brinquedo_livre_usa_a_direcao_do_rebote(tmp_path):
+    game=game_at_rest(tmp_path)
+    game.body.angle=-20.
+    game.play_reaction=dict(kind='brinquedo_rebatida',started=100.,until=100.42,
+                            intensity=.8,heading=142.)
+    pose=ExpressionMotion(100.).update(game,100.13)
+    aim=math.degrees(math.atan2(pose['gaze'][1],pose['gaze'][0]))
+    assert aim+game.body.angle+pose['angle_offset']==pytest.approx(142.)
+    assert pose['effect']=='rebatida'
+
+
+def test_raiva_visual_responde_a_intensidade_tambem_na_previa():
+    mild=animation_pose('bravo',.6,.1)
+    furious=animation_pose('bravo',.6,.95)
+    assert furious['anger']>mild['anger']>.4
+    assert furious['effect']=='bravo' and furious['eye_open']<mild['eye_open']
 
 
 @pytest.mark.parametrize('reason',['ungrab','hidden'])

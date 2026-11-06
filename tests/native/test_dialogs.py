@@ -156,6 +156,48 @@ def test_aplicar_preserva_sensores_desligados_e_valores_nao_editados(app):
     assert not dialog.apply_button.isEnabled()
 
 
+def test_central_pausa_a_previa_ao_trocar_de_area(app):
+    dialog = SettingsDialog(ControllerStub())
+    dialog.show()
+    assert [dialog.tabs.tabText(i) for i in range(dialog.tabs.count())]==['Bolha','Testar','Privacidade','App']
+    assert not dialog.lab.timer.isActive()
+    dialog.tabs.setCurrentIndex(1)
+    app.processEvents()
+    assert dialog.lab.timer.isActive()
+    dialog.tabs.setCurrentIndex(0)
+    app.processEvents()
+    assert not dialog.lab.timer.isActive()
+
+
+def test_experimento_neural_isola_cena_memoria_e_dados(app,tmp_path):
+    from pathlib import Path
+    from game import Game
+    from pestinha import scene
+    from bolha.expression_lab import ExpressionLab
+    live = Game(tmp_path, Path(__file__).resolve().parents[2]/'assets/bolha/content')
+    learned = live.brain.learned.copy()
+    existing = set(tmp_path.rglob('*'))
+    lab = ExpressionLab()
+    try:
+        lab.mode.setCurrentIndex(1)
+        lab.stimulus.setCurrentIndex(lab.stimulus.findData('throw'))
+        lab.stimulate()
+        assert lab.brain is not live.brain and lab.senses is not live.senses
+        assert lab.senses.pulse['THROW']>0.
+        lab.next_brain = 0.
+        before = lab.brain.time_ms
+        lab.tick()
+        assert lab.brain.time_ms>before
+        assert scene._current is live
+        assert np.array_equal(live.brain.learned, learned)
+        assert set(tmp_path.rglob('*'))==existing
+        old = lab.brain
+        lab.restart()
+        assert lab.brain is not old and not np.any(lab.brain.learned)
+    finally:
+        lab.close()
+
+
 def test_controles_de_retorno_sao_ptbr_editaveis_e_salvos_sem_afetar_outros_campos(app):
     controller = ControllerStub()
     dialog = SettingsDialog(controller)

@@ -29,8 +29,10 @@ def gesture(request,qt_application,tmp_path,monkeypatch):
     game.configure(dict(senseApp=False,senseIdle=False,senseCursor=False,senseWindows=False,
                         roaming=False,mischiefEnabled=False,adaptiveBehavior=False,
                         toyAppearance='ball' if request.param=='ball' else 'peanut'))
-    game.body.x,game.body.y=500,300;game.ball.body.x,game.ball.body.y=500,300;game.ball.place()
     pet=request.param=='pet'
+    game.body.x,game.body.y=(500 if pet else 150),300
+    game.ball.body.x,game.ball.body.y=(150 if pet else 500),300
+    game.ball.place()
     window=PetWindow(game) if pet else ObjectWindow(NativeScene(game),game.ball)
     body=game.body if pet else game.ball.body
     window.sync();window.mousePressEvent(mouse(508,309))

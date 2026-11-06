@@ -477,7 +477,9 @@ class Game:
             self.intelligence.history.append(dict(self.intelligence.current_decision))
         elif kind == 'celebrate':
             allowed = (self.visible() and not self.sleep.asleep and self.drives.energy > .2
-                       and self.state.emotion in ('feliz','contente') and now >= self.festa.pronto_em)
+                       and not self.body.held
+                       and not self._shy_returning(now)
+                       and self.state.emotion in ('feliz','contente') and now >= self.festa.request_ready_at)
             if allowed: self.festa.requested=True
             self.intelligence.current_decision = dict(action='celebrate' if allowed else 'request_refused',target='fireworks' if allowed else None,
                     intensity=1.,duration=3.2,source='explicit_user_request',
@@ -538,6 +540,7 @@ class Game:
         self.play_reaction = {}
         self.release_reaction = {}
         self.play.requested_action = None
+        self.festa.requested = False
         self.ball.last_handled = -math.inf
         self.toy_tracker.away = False
         self.behavior.drop_carried()
@@ -610,7 +613,9 @@ class Game:
             self.drives.stimulate('novelty',.3)
             self.drives.touched('poke',.2)
         if event in ('pet_hit','player_point','pet_point'):
-            kind = {'pet_hit':'pingpong_rebatida','player_point':'bote_erro','pet_point':'comemorando'}[event]
+            kind = {'pet_hit':'pingpong_rebatida','player_point':'assustado','pet_point':'feliz'}[event]
+            if match.finished and match.winner=='pet':
+                kind='comemorando'
             duration = .42 if event == 'pet_hit' else 1.15
             self.play_reaction = dict(kind=kind,started=now,until=now+duration,intensity=.8)
             if event == 'pet_hit':
@@ -642,6 +647,7 @@ class Game:
         self.strong_throws.clear()
         self.pop_started = now
         self.pop_return_at = now+POP_RETURN_SECONDS
+        self.festa.requested = False
         self.body.vx = self.body.vy = self.body.omega = 0.
         self.body.grounded = False
         self.in_flight = False
@@ -813,12 +819,70 @@ class Game:
         self.state.gaze = ((dx*math.cos(angle)+dy*math.sin(angle))/distance,
                            (-dx*math.sin(angle)+dy*math.cos(angle))/distance)
 
+    def _toy_contact(self, previous_pet, previous_toy, now):
+        """O contato circular reflete o brinquedo, inclusive entre dois quadros."""
+        pet, toy = self.body, self.ball.body
+        if (self.ball_stored or not self.ball.isVisible() or self.panel or pet.held
+                or toy.held or self.ball.dragging or self._shy_returning(now)):
+            return
+        if math.dist(previous_pet,(pet.x,pet.y))>250. or math.dist(previous_toy,(toy.x,toy.y))>250.:
+            return
+        radius = pet.half_w+toy.half_w
+        start = previous_toy[0]-previous_pet[0],previous_toy[1]-previous_pet[1]
+        end = toy.x-pet.x,toy.y-pet.y
+        delta = end[0]-start[0],end[1]-start[1]
+        distance = math.hypot(*end)
+        normal = end
+        if math.hypot(*start)>radius:
+            a = delta[0]**2+delta[1]**2
+            b = 2.*(start[0]*delta[0]+start[1]*delta[1])
+            c = start[0]**2+start[1]**2-radius**2
+            discriminant = b*b-4.*a*c
+            if a<=1e-12 or discriminant<0.:
+                return
+            contact = (-b-math.sqrt(discriminant))/(2.*a)
+            if not 0.<=contact<=1.:
+                return
+            normal = start[0]+delta[0]*contact,start[1]+delta[1]*contact
+        elif distance>=radius:
+            return
+        length=math.hypot(*normal)
+        nx,ny=(normal[0]/length,normal[1]/length) if length>1e-8 else (1.,0.)
+        toy.x,toy.y=pet.x+nx*(radius+.5),pet.y+ny*(radius+.5)
+        incoming=(toy.vx-pet.vx)*nx+(toy.vy-pet.vy)*ny
+        if incoming<0.:
+            restitution=.78 if incoming < -80. else 0.
+            toy.vx-=(1.+restitution)*incoming*nx
+            toy.vy-=(1.+restitution)*incoming*ny
+            toy.grounded=False;toy.platform=None
+        self.fit(toy,margin=0.)
+        self.ball.place()
+        if incoming>=-90.:
+            return
+        strength=min(1.,-incoming/1200.)
+        self.senses.impact(strength*.35)
+        self.senses.kick('NOVELTY',.35)
+        asleep=self.sleep.asleep
+        if asleep:
+            self.sleep.wake(startled=True)
+        playing=(not asleep and self.drives.energy>.18
+                 and self.state.emotion in ('feliz','contente','curioso','atento','observando')
+                 and now>=self.quiet_until)
+        self.play_reaction=dict(kind='brinquedo_rebatida' if playing else 'brinquedo_susto',
+                                started=now,until=now+(.42 if playing else .75),
+                                intensity=max(.35,strength),
+                                heading=math.degrees(math.atan2(toy.vy,toy.vx)))
+        self._look_at_point((toy.x,toy.y))
+
     def _play_expression(self,now):
         attempt=self.behavior.last_play
         kind=None;duration=1.6
         if attempt and attempt['started']!=self.last_play_attempt:
             self.last_play_attempt=attempt['started']
-            kind='comemorando' if attempt['action'] else 'bote_erro'
+            if attempt['action']:
+                kind='brinquedo_rebatida';duration=.42
+            else:
+                return
         elif self.behavior.toy_action in ('chase','hop'):
             current = self.play_reaction
             if current.get('kind')=='brinquedo_perseguindo':
@@ -839,6 +903,8 @@ class Game:
         if kind:
             intensity=max(.35,min(1.,self.behavior.play_pull+self.state.tone.r.get('CHEER',0)*.3))
             self.play_reaction=dict(kind=kind,started=now,until=now+duration,intensity=intensity)
+            if kind=='brinquedo_rebatida':
+                self.play_reaction['heading']=math.degrees(math.atan2(self.ball.body.vy,self.ball.body.vx))
             self.next_play_scene=now+12
 
     def reset_learning(self):
@@ -979,6 +1045,7 @@ class Game:
         if not self.panicked and not self.hidden: self.read_context(now)
         frozen = self.panicked or self.hidden or not self.available_areas()
         if frozen:
+            self.festa.requested=False
             self.stop_pingpong()
             self._cancel_holds(now)
             self._reset_cursor_motion()
@@ -1031,12 +1098,15 @@ class Game:
             # A situação pode mudar entre o clique e o próximo quadro.
             self.play.requested_action = None
         self._play_expression(now)
+        previous_pet=self.body.x,self.body.y
+        previous_toy=self.ball.body.x,self.ball.body.y
         self.body.step(dt,area,platforms,areas,monitors,[d for i,d in enumerate(self.displays) if i not in self.blocked])
         self._track_landing(now)
         if self.body.grounded:self.in_flight=False
         if self.mesa.sentado and self.mesa.pin(self.body,now): self.mesa.levantar_arrancado(now); self.protest_ctl.provoke(.1)
         if not self.ball_stored:
             self.ball.step(dt,self.bounds((self.ball.body.x,self.ball.body.y)),areas,monitors,[d for i,d in enumerate(self.displays) if i not in self.blocked])
+            self._toy_contact(previous_pet,previous_toy,now)
         self._focus_gaze(now)
         impacts = self.body.pop_impacts()
         self.landing *= math.exp(-dt * 12)
@@ -1055,7 +1125,9 @@ class Game:
         self.festa.rates = self.rates
         self.festa.energy = self.drives.energy
         self.festa.contact = self.drives.contact
-        self.festa.tick(now,self.rates,self.state.emotion,self.body,not shy_return and self.visible() and not self.sleep.asleep,dt)
+        self.festa.tick(now,self.rates,self.state.emotion,self.body,
+                        not shy_return and self.visible() and not self.sleep.asleep
+                        and not self.body.held and not self.panel and now>=self.quiet_until,dt)
         self.revolucao.rates = self.rates
         self.revolucao.energy = self.drives.energy
         self.revolucao.contact = self.drives.contact

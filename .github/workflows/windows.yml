@@ -61,6 +61,28 @@ jobs:
         shell: pwsh
         run: |
           python scripts/test_windows_native.py --installer "release/Bolha-Setup-$($env:BOLHA_VERSION)-x64.exe" --target-installer "validation/update-feed/Bolha-Setup-$($env:BOLHA_NEXT_VERSION)-x64.exe" --output validation/windows-native
+      - name: Atualizar a versão estável anterior pelo instalador novo
+        if: github.ref_type == 'tag' || inputs.publish_release
+        timeout-minutes: 5
+        shell: pwsh
+        run: |
+          $bolhaPreviousInstaller = @'
+          from pathlib import Path
+          from bolha import VERSION
+          from bolha.installation import compare_versions
+          from bolha.updates import Transport, find_release
+          transport = Transport()
+          previous = find_release(transport, '0.0.0')
+          if previous is None or compare_versions(previous.version, VERSION) >= 0:
+              raise RuntimeError('A versão estável anterior precisa ser mais antiga que a candidata.')
+          target = Path('validation/previous-native') / previous.name
+          target.parent.mkdir(parents=True, exist_ok=True)
+          transport.download(previous, target)
+          print(target.resolve())
+          '@ | python -
+          if ($LASTEXITCODE -ne 0) { throw 'Não consegui verificar o instalador estável anterior.' }
+          python scripts/test_windows_native.py --installer "$bolhaPreviousInstaller" --target-installer "release/Bolha-Setup-$($env:BOLHA_VERSION)-x64.exe" --output validation/from-previous-native
+          if ($LASTEXITCODE -ne 0) { throw 'A atualização da versão estável anterior falhou.' }
       - uses: actions/setup-node@v4
         if: github.ref_type == 'tag' || inputs.legacy_validation || inputs.publish_release
         with:

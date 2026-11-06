@@ -266,10 +266,11 @@ def test_cenas_de_brincadeira_vem_do_resultado_e_dos_motores(tmp_path):
     game=Game(tmp_path,CONTENT)
     game.behavior.last_play=dict(started=100.,action=None)
     game._play_expression(100)
-    assert game.play_reaction['kind']=='bote_erro'
+    assert not game.play_reaction
     game.behavior.last_play=dict(started=110.,action='kick')
     game._play_expression(110)
-    assert game.play_reaction['kind']=='comemorando'
+    assert game.play_reaction['kind']=='brinquedo_rebatida'
+    assert game.play_reaction['heading'] == 0.
     game.body.grounded=True;game.next_play_scene=0
     game.mesa.decisao.at_desk=True;game.behavior.play_pull=0
     game._play_expression(120)
@@ -301,7 +302,7 @@ def test_sinais_de_proximidade_chegam_a_rede_e_impulsionam_brinquedo(tmp_path,mo
     assert game.ball.body.vx>0 and game.ball.body.vy<0
 
 
-@pytest.mark.parametrize('choice,expected',[('kick','comemorando'),('wait','bote_erro')])
+@pytest.mark.parametrize('choice,expected',[('kick','brinquedo_rebatida'),('wait',None)])
 def test_play_real_continua_neural_e_gera_reacao_da_tentativa(tmp_path,monkeypatch,choice,expected):
     game=Game(tmp_path,CONTENT)
     monkeypatch.setattr(game.intelligence,'choose',lambda action,candidates,**kwargs:choice)
@@ -316,7 +317,7 @@ def test_play_real_continua_neural_e_gera_reacao_da_tentativa(tmp_path,monkeypat
     game.behavior.tick(.016,101,game.cursor,game.bounds(),game.prof)
     assert game.behavior.last_play['started']==101
     game._play_expression(101)
-    assert game.play_reaction['kind']==expected
+    assert game.play_reaction.get('kind')==expected
     if choice=='kick':
         assert game.ball.body.vx>0 and game.ball.body.vy<0
     else:assert vars(game.ball.body)==before
@@ -352,7 +353,7 @@ def test_bobinho_persegue_irrita_e_devolve_no_contato(tmp_path, monkeypatch):
     move('drag-end', pet.x+52., pet.y-43.)
     assert toy.vy < -300. and not toy.held
     assert game.behavior.toy_action == 'return'
-    assert game.play_reaction['kind'] == 'comemorando'
+    assert game.play_reaction['kind'] == 'brinquedo_rebatida'
 
 
 def test_toque_de_baixo_para_cima_levanta_brinquedo_e_inicia_brincadeira(tmp_path, monkeypatch):

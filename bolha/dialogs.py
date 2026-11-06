@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
     QApplication, QCheckBox, QComboBox, QDialog, QDialogButtonBox, QFormLayout,
     QHBoxLayout, QLabel, QMessageBox, QPlainTextEdit, QProgressBar, QPushButton,
     QScrollArea, QSpinBox, QTabWidget, QTableWidget, QTableWidgetItem,
-    QHeaderView, QAbstractItemView, QVBoxLayout, QWidget, QDoubleSpinBox,
+    QHeaderView, QAbstractItemView, QVBoxLayout, QWidget, QDoubleSpinBox, QToolButton,
 )
 from . import VERSION
 from .preferences import DEFAULTS, OBJECT_SCALE_TYPES
@@ -58,18 +58,19 @@ class SettingsDialog(QDialog):
     def __init__(self, controller):
         super().__init__()
         self.controller = controller
-        self.setWindowTitle('Configurações da Bolha')
-        self.setAccessibleName('Configurações da Bolha')
+        self.setWindowTitle('Central da Bolha')
+        self.setAccessibleName('Central da Bolha')
         self._loading = True
         self.checks = {}
         self.baseline = {}
         self.startup = False
         self.tabs = QTabWidget()
-        self.tabs.setAccessibleName('Categorias de configurações')
+        self.tabs.setAccessibleName('Áreas da central da Bolha')
         layout = QVBoxLayout(self)
         layout.addWidget(self.tabs, 1)
         self._appearance_tab()
         self._behavior_tab()
+        self._test_tab()
         self._privacy_tab()
         self._app_tab()
         self.status = _label()
@@ -98,7 +99,7 @@ class SettingsDialog(QDialog):
         self.update_timer.setInterval(1000)
         self.update_timer.timeout.connect(self.refresh_update)
         controller.updater.changed.connect(self.refresh_update)
-        _fit(self, 590, 570)
+        _fit(self, 610, 550)
 
     def _tab(self, title):
         body = QWidget()
@@ -121,6 +122,24 @@ class SettingsDialog(QDialog):
         layout.addWidget(control)
         return control
 
+    def _details(self, title, layout):
+        toggle = QToolButton()
+        toggle.setText(title)
+        toggle.setAccessibleName(title)
+        toggle.setToolButtonStyle(Qt.ToolButtonTextBesideIcon)
+        toggle.setArrowType(Qt.RightArrow)
+        toggle.setCheckable(True)
+        body = QWidget()
+        inner = QVBoxLayout(body)
+        inner.setContentsMargins(16, 8, 0, 4)
+        inner.setSpacing(10)
+        body.hide()
+        toggle.toggled.connect(body.setVisible)
+        toggle.toggled.connect(lambda opened: toggle.setArrowType(Qt.DownArrow if opened else Qt.RightArrow))
+        layout.addWidget(toggle)
+        layout.addWidget(body)
+        return inner
+
     def _spin(self, low, high, suffix, name):
         control = QSpinBox()
         control.setRange(low, high)
@@ -130,18 +149,31 @@ class SettingsDialog(QDialog):
         return control
 
     def _appearance_tab(self):
-        layout = self._tab('Aparência')
-        layout.addWidget(_label('Ajuste o tamanho e a transparência da Bolha.'))
+        layout = self._tab('Bolha')
+        self._general_layout = layout
+        layout.addWidget(_label('Sua companhia na área de trabalho.'))
         form = QFormLayout()
         self.avatar_size = self._spin(48, 200, ' px', 'Tamanho da Bolha')
         self.opacity = self._spin(20, 100, ' %', 'Opacidade da Bolha')
         form.addRow('&Tamanho:', self.avatar_size)
-        form.addRow('&Opacidade:', self.opacity)
+        self.toy_appearance=QComboBox()
+        self.toy_appearance.setAccessibleName('Aparência do brinquedo')
+        self.toy_appearance.addItem('Amendoim','peanut')
+        self.toy_appearance.addItem('Bolinha original','ball')
+        self.toy_appearance.currentIndexChanged.connect(self._dirty)
+        form.addRow('&Brinquedo:',self.toy_appearance)
         layout.addLayout(form)
+        self._check('roaming', 'Passear pela tela', layout,
+                    'O passeio pausa durante o arrasto, o carinho e o uso dos painéis.')
+        self._check('mischiefEnabled', 'Trazer memes e bilhetes', layout)
+        appearance = self._details('Tamanhos e aparência', layout)
+        advanced_form = QFormLayout()
+        advanced_form.addRow('&Opacidade:', self.opacity)
+        appearance.addLayout(advanced_form)
         self.object_scales = {}
         object_names = {'toy':'Brinquedo', 'notebook':'Caderno', 'reaction':'Reações',
                         'note':'Bilhetes', 'sign':'Placas', 'corner':'Cantinho', 'effects':'Efeitos'}
-        layout.addWidget(_label('Tamanho dos objetos acompanha o tamanho da Bolha; ajuste cada tipo quando quiser.'))
+        appearance.addWidget(_label('Os objetos acompanham a Bolha. Ajuste cada tipo se precisar.'))
         for kind in OBJECT_SCALE_TYPES:
             control = QDoubleSpinBox()
             control.setRange(.6, 1.8)
@@ -151,32 +183,18 @@ class SettingsDialog(QDialog):
             control.setAccessibleName(f'Tamanho: {object_names[kind]}')
             control.valueChanged.connect(self._dirty)
             self.object_scales[kind] = control
-            form.addRow(f'{object_names[kind]}:', control)
-        self._check('roaming', 'Passear pela tela', layout,
-                    'O passeio pausa durante o arrasto, o carinho e o uso dos painéis.')
-        layout.addWidget(_button('Restaurar aparência', self.reset_appearance))
-        layout.addWidget(_label('Use Aplicar para salvar as alterações. Restaurar aparência altera somente tamanho e opacidade.'))
-        layout.addStretch()
+            advanced_form.addRow(f'{object_names[kind]}:', control)
+        appearance.addWidget(_button('Restaurar tamanho e opacidade', self.reset_appearance))
 
     def _behavior_tab(self):
-        layout = self._tab('Comportamento')
-        toy_form=QFormLayout()
-        self.toy_appearance=QComboBox()
-        self.toy_appearance.setAccessibleName('Aparência do brinquedo')
-        self.toy_appearance.addItem('Amendoim','peanut')
-        self.toy_appearance.addItem('Bolinha original','ball')
-        self.toy_appearance.currentIndexChanged.connect(self._dirty)
-        toy_form.addRow('&Brinquedo:',self.toy_appearance)
-        layout.addLayout(toy_form)
-        self._check('mischiefEnabled', 'Trazer memes e bilhetes', layout)
+        layout = self._details('Comportamento e aprendizado', self._general_layout)
         self._check('popEnabled', 'Estourar após muitos arremessos fortes', layout,
                     'A contagem considera arremessos fortes numa janela de 1 minuto. A Bolha volta após 30 segundos.')
-        layout.addWidget(_label('Depois de estourar, a Bolha volta tímida em 30 segundos.'))
         pop_form = QFormLayout()
         self.pop_throw_limit = self._spin(5, 30, '', 'Arremessos fortes para estourar')
         pop_form.addRow('&Limite de arremessos fortes:', self.pop_throw_limit)
         layout.addLayout(pop_form)
-        self._check('onlineReactions', 'Buscar reações online (memes e GIFs sem salvar em disco)', layout,
+        self._check('onlineReactions', 'Buscar memes e GIFs online', layout,
                     'Consulta ReactionGIFs e Nekos.best apenas com termos genéricos de humor; mídia fica só em memória.')
         form = QFormLayout()
         self.interval = self._spin(1, 30, ' min', 'Intervalo mínimo entre travessuras')
@@ -190,8 +208,15 @@ class SettingsDialog(QDialog):
         self.checks['popEnabled'].toggled.connect(self.pop_throw_limit.setEnabled)
         self._check('adaptiveBehavior', 'Usar objetivos e aprendizado adaptativo', layout)
         self._check('learnRoutine', 'Aprender hábitos por horário', layout)
-        layout.addWidget(_label('O aprendizado permanece neste computador. Desativar uma função preserva o que já foi aprendido.'))
-        layout.addWidget(_button('Abrir painel neural', self.controller.show_neural))
+        layout.addWidget(_label('O aprendizado fica neste computador. Desativar preserva a memória.'))
+        self._general_layout.addStretch()
+
+    def _test_tab(self):
+        from .expression_lab import ExpressionLab
+        layout = self._tab('Testar')
+        self.lab = ExpressionLab()
+        layout.addWidget(self.lab)
+        layout.addWidget(_button('Ver o cérebro da minha Bolha', self.controller.show_neural))
         layout.addStretch()
 
     def _privacy_tab(self):
@@ -204,8 +229,7 @@ class SettingsDialog(QDialog):
             ('senseWindows', 'Posição e tamanho das janelas', 'Usa a geometria para pousar e evitar telas cheias, sem capturar imagens.'),
         ):
             self._check(key, text, layout, description)
-            layout.addWidget(_label(description))
-        layout.addWidget(_label('Quando a busca de reações online está ativa em Comportamento, a Bolha envia apenas termos genéricos de humor em inglês para ReactionGIFs/Nekos.best e mantém imagens/GIFs somente em memória RAM.'))
+        layout.addWidget(_label('Cada leitura pode ser desligada separadamente. Memes online usam só termos genéricos de humor; imagens ficam na memória RAM.'))
         layout.addStretch()
 
     def _app_tab(self):
@@ -215,7 +239,6 @@ class SettingsDialog(QDialog):
         self.autostart.setAccessibleName('Iniciar com o Windows')
         self.autostart.toggled.connect(self._dirty)
         layout.addWidget(self.autostart)
-        layout.addWidget(_label('Instalações novas começam com essa opção desligada.'))
         self.update_label = _label()
         self.update_label.setAccessibleName('Estado da atualização')
         layout.addWidget(self.update_label)
@@ -225,10 +248,11 @@ class SettingsDialog(QDialog):
         row.addWidget(self.check_update)
         row.addWidget(self.defer_update)
         layout.addLayout(row)
-        layout.addWidget(_label('Atualizações pelo GitHub Releases. A consulta acontece ao abrir e a cada seis horas.'))
-        layout.addWidget(_button('Copiar diagnóstico local', self.copy_diagnostics))
-        layout.addWidget(_label('O relatório fica local. Você escolhe se quer compartilhar o texto copiado.'))
-        layout.addWidget(_button('Apagar aprendizado…', self.reset_learning))
+        layout.addWidget(_label('Consulta ao abrir e a cada seis horas.'))
+        maintenance = self._details('Diagnóstico e manutenção', layout)
+        maintenance.addWidget(_button('Copiar diagnóstico local', self.copy_diagnostics))
+        maintenance.addWidget(_label('O relatório fica local. Você escolhe onde compartilhar.'))
+        maintenance.addWidget(_button('Apagar aprendizado…', self.reset_learning))
         layout.addStretch()
 
     def _values(self):

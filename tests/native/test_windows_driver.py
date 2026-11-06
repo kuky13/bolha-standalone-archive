@@ -15,6 +15,50 @@ from scripts.test_windows_native import (Feed, NativeValidation, installer_versi
 import scripts.test_windows_native as driver
 
 
+def test_registro_ignora_criacao_da_chave_compartilhada_mas_detecta_entrada_da_bolha(monkeypatch):
+    from contextlib import nullcontext
+    import sys
+    state=dict(exists=False,bolha=None)
+    def open_key(_root,location,*_args):
+        if not location.endswith('Run') or not state['exists']:
+            raise FileNotFoundError
+        return nullcontext(location)
+    def query(_key,name):
+        assert name=='Bolha'
+        if state['bolha'] is None:
+            raise FileNotFoundError
+        return state['bolha'],1
+    registry=SimpleNamespace(OpenKey=open_key,QueryValueEx=query,HKEY_CURRENT_USER=1,
+                             KEY_READ=1,KEY_WOW64_64KEY=2)
+    monkeypatch.setitem(sys.modules,'winreg',registry)
+    before=driver.registry_fingerprint()
+    state['exists']=True
+    assert driver.registry_fingerprint()==before
+    state['bolha']='Bolha.exe'
+    assert driver.registry_fingerprint()!=before
+
+
+@pytest.mark.parametrize('exited',[True,False])
+def test_consulta_do_processo_aguarda_a_saida_sem_ignorar_falha_de_permissao(monkeypatch,exited):
+    from unittest.mock import Mock
+    kernel = SimpleNamespace(
+        OpenProcess=Mock(return_value=1),
+        WaitForSingleObject=Mock(side_effect=[258,0 if exited else 258]),
+        QueryFullProcessImageNameW=Mock(return_value=False),
+        CloseHandle=Mock(),
+    )
+    monkeypatch.setattr(driver.ctypes,'WinDLL',lambda *_args,**_kwargs:kernel,raising=False)
+    monkeypatch.setattr(driver.ctypes,'get_last_error',lambda:5,raising=False)
+    monkeypatch.setattr(driver.ctypes,'WinError',lambda code:PermissionError(code,'Acesso negado'),raising=False)
+    if exited:
+        assert driver.process_alive(123,'Bolha.exe') is False
+    else:
+        with pytest.raises(PermissionError):
+            driver.process_alive(123,'Bolha.exe')
+    assert kernel.WaitForSingleObject.call_args_list[-1].args==(1,100)
+    kernel.CloseHandle.assert_called_once_with(1)
+
+
 def test_legacy_never_runs_on_notebook_and_needs_hosted_runner():
     hosted = dict(GITHUB_ACTIONS='true', RUNNER_ENVIRONMENT='github-hosted', RUNNER_OS='Windows')
     assert legacy_allowed(hosted, 'github-runner')

@@ -19,7 +19,7 @@ class PingPong:
         if width < max(320.,4*self.pet_radius) or height < max(220.,2*self.pet_radius+24.):
             raise ValueError("usable area is too small for ping-pong")
         self.speed_scale = self._clamp(width/1100.,.82,2.)
-        self.cursor_radius = self.toy_radius + 11.
+        self.cursor_radius = self.toy_radius + max(14.,min(24.,self.toy_radius))
         self.pet_x = left + self.pet_radius + 12.
         self.pet_y = (top+bottom)/2
         self.ball_x = (left+right)/2

@@ -190,7 +190,7 @@ class NativeApp:
         result=self.game.interact(dict(type=kind,**kwargs));self.pet.sync();self.scene.sync()
         return result
     def sync_pingpong(self):
-        self.pingpong_view.sync(self.game.pingpong,self.game.pingpong_paused())
+        self.pingpong_view.sync(self.game.pingpong,self.game.pingpong_paused(),cursor=self.game.cursor)
         if self.pingpong_view.isVisible():
             self.game.excluded.add(int(self.pingpong_view.winId()))
     def toggle_pingpong(self):
@@ -220,26 +220,33 @@ class NativeApp:
         return self.save_preferences({'objectScales':scales})
     def make_menu(self):
         menu=QMenu()
-        for label,kind in (('Carinho','caress'),('Dormir um pouco','sleep'),('Acordar','wake'),('Mostrar / guardar brinquedo','ball'),('Vamos brincar','play'),('Jogar pingue-pongue','pingpong'),('Notebook de brincadeira','notebook'),('Vem trabalhar comigo','work'),('Comemorar','celebrate'),('Uma travessura','mischief'),('Cantinho / perdão','corner'),('Sossega um pouquinho','quiet')):
-            action=menu.addAction(label)
-            if kind=='pingpong':
-                self.pingpong_action=action
-                action.triggered.connect(self.toggle_pingpong)
-            else:
-                action.triggered.connect(lambda checked=False,k=kind:self.interact(k))
+        action=menu.addAction('Central da Bolha…')
+        action.triggered.connect(self.show_settings)
+        play=menu.addMenu('Brincar')
+        self.pingpong_action=play.addAction('Jogar pingue-pongue')
+        self.pingpong_action.triggered.connect(self.toggle_pingpong)
+        for label,kind in (('Mostrar / guardar brinquedo','ball'),('Vamos brincar','play'),
+                           ('Notebook de brincadeira','notebook'),('Vem trabalhar comigo','work')):
+            action=play.addAction(label)
+            action.triggered.connect(lambda checked=False,k=kind:self.interact(k))
+        interactions=menu.addMenu('Interagir')
+        for label,kind in (('Carinho','caress'),('Dormir um pouco','sleep'),('Acordar','wake'),
+                           ('Comemorar','celebrate'),('Uma travessura','mischief'),
+                           ('Cantinho / perdão','corner'),('Sossega um pouquinho','quiet')):
+            action=interactions.addAction(label)
+            action.triggered.connect(lambda checked=False,k=kind:self.interact(k))
+        action=interactions.addAction('Mostrar uma reação agora')
+        action.triggered.connect(lambda:self.request_reaction())
         menu.addSeparator()
-        action=menu.addAction('Mostrar uma reação agora');action.triggered.connect(lambda:self.request_reaction())
-        action=menu.addAction('Configurações…');action.triggered.connect(self.show_settings)
-        action=menu.addAction('Cérebro e emoções…');action.triggered.connect(self.show_neural)
         action=menu.addAction('Mostrar / esconder');action.triggered.connect(lambda:self.interact('hide',value=not self.game.hidden))
-        action=menu.addAction('Modo de emergência (Ctrl+Alt+Shift+B)');action.triggered.connect(lambda:self.interact('panic'))
-        updates=menu.addMenu('Atualizações')
-        action=updates.addAction('Verificar agora');action.triggered.connect(lambda:self.updater.check())
-        action=updates.addAction('Adiar por uma hora');action.triggered.connect(lambda:self.updater.defer())
+        pause=menu.addAction('Pausar tudo')
+        pause.setToolTip('Pausa de emergência · Ctrl+Alt+Shift+B')
+        pause.triggered.connect(lambda:self.interact('panic'))
         menu.addSeparator();action=menu.addAction('Sair');action.triggered.connect(self.quit)
         menu.aboutToShow.connect(self._panel_opened);menu.aboutToHide.connect(self._panel_closed)
         menu.aboutToShow.connect(lambda:self.pingpong_action.setText(
             'Encerrar pingue-pongue' if self.game.pingpong else 'Jogar pingue-pongue'))
+        menu.aboutToShow.connect(lambda:pause.setText('Retomar a Bolha' if self.game.panicked else 'Pausar tudo'))
         return menu
     def show_menu(self,point):self.menu.popup(point)
     def _tray_activated(self,reason):
